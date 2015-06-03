@@ -9,7 +9,7 @@
     },
     "watch": {
         "enabled": true,
-        "directory": "/Users/morris/Desktop/StylusGUITest/stylus"
+        "directory": "/Users/morris/Desktop/LESSGUITest/less"
     },
     "css": {
         "minify": true,

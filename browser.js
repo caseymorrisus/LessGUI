@@ -1,6 +1,7 @@
 var ipc 			= require('ipc'),
 	fs 				= require('fs'),
 	stylus 			= require('stylus'),
+	less			= require('less'),
 	path 			= require('path'),
 	Gaze 			= require('gaze'),
 	csswring 		= require('csswring'),
@@ -22,24 +23,27 @@ $('#menu').on('click', function () {
 
 function watchDirectory (bool) {
 	if (bool) {
-		gaze = new Gaze('*.styl', {cwd: options.watch.directory}, function (err, watcher) {
+		console.log("Watched Dir: " + options.watch.directory);
+		gaze = null;
+		gaze = new Gaze('*.less', {cwd: options.watch.directory}, function (err, watcher) {
 			this.on('changed', function (filepath) {
 				console.log(filepath + ' was changed');
 				var dest = getDestination(filepath);
 				start = +new Date();
-				readStylusFile(filepath, dest, compileStylus);
+				readLessFile(filepath, dest, compileLess);
 			});
 
 			this.on('added', function (filepath) {
 				console.log(filepath + ' was added');
 				var dest = getDestination(filepath);
 				start = +new Date();
-				readStylusFile(filepath, dest, compileStylus);
+				readLessFile(filepath, dest, compileLess);
 			});
 		});
 	} else {
 		try {
 			gaze.close();
+			gaze = null;
 		} catch (err) {
 			console.log('No watch open');
 		}
@@ -57,23 +61,21 @@ holder.ondrop = function (e) {
 	var files = e.dataTransfer.files;
 	var file = e.dataTransfer.files[0];
 	var dest = getDestination(file.path);
-	//console.log(JSON.stringify(files, null, 4));
 	if ( files.length === 1 ) {
 		var extension = path.extname(files['0'].path);
-		if ( extension === '.styl' ) {
-			readStylusFile(file.path, dest, compileStylus);
+		if ( extension === '.less' ) {
+			readLessFile(file.path, dest, compileLess);
 		} else {
-			changeInfoText("File was not a Stylus file.");
+			changeInfoText("File was not a LESS file.");
 		};
 	} else if ( files.length > 1 ) {
 		var stylFiles = [];
 		_.forEach(files, function(n, key) {
-			if ( path.extname(files[key].path) === '.styl' ) {
+			if ( path.extname(files[key].path) === '.less' ) {
 				stylFiles.push(files[key].path);
 			}
 		});
-		readManyStylusFiles(stylFiles, dest, compileStylus);
-		//console.log(stylFiles);
+		readManyLessFiles(stylFiles, dest, compileLess);
 	};
 	return false;
 };
@@ -127,44 +129,41 @@ function compileFileEnd (fileName) {
 	currentFile += 1;
 };
 
-function compileStylus (stylusStr, fileName, dest , many) {
-	stylus.render(stylusStr, function (err, css) {
+function compileLess (lessStr, fileName, dest , many) {
+	less.render(lessStr, function (err, output) {
 		if (err) throw err;
-		fs.writeFile(dest + fileName + '.css', css, function(err) {
+		fs.writeFile(dest + fileName + '.css', output.css, function(err) {
 			if (err) {
 				changeInfoText('Directory does not exist');
 				throw err;
 			}
 
 			if(options.css.autoprefix) {
-				autoprefixCss(css, fileName, dest);
+				autoprefixCss(output.css, fileName, dest);
 				return;
 			};
 
 			if(options.css.minify && options.css.autoprefix === false) {
-				minifyCss(fileName, css, dest);
+				minifyCss(fileName, output.css, dest);
 				return;
 			}
 			
 			compileEnd(fileName);
-			//end = +new Date();
-			//var compileTime = end - start;
-			//changeInfoText("Compiled " + fileName + '.css in ' + compileTime + 'ms');
 		});
 	});
 };
 
-function readStylusFile (src, dest, callback) {
-	var fileName = path.basename(src, '.styl');
+function readLessFile (src, dest, callback) {
+	var fileName = path.basename(src, '.less');
 	fs.readFile(src, 'utf8', function (err, data) {
 		if (err) throw err;
 		callback(data, fileName, dest);
 	});
 };
 
-function readManyStylusFiles (array, dest, callback) {
+function readManyLessFiles (array, dest, callback) {
 	array.forEach(function (filePath) {
-		var fileName = path.basename(filePath, '.styl');
+		var fileName = path.basename(filePath, '.less');
 		fs.readFile(filePath, 'utf8', function (err, data) {
 			if (err) throw err;
 			callback(data, fileName, dest, true);
@@ -182,11 +181,8 @@ function compileOptionClicked (obj) {
 	var selectArray = [];
 	$('#compileOptions div').removeClass('selected');
 	obj.addClass('selected');
-
-	//options.compile[clickedId] = true;
 	selectArray.push('compile', clickedId);
 	selectOption(selectArray);
-	//console.log(JSON.stringify(options,null,4));
 };
 
 function cssOptionClicked (obj) {
@@ -279,6 +275,9 @@ ipc.on('open-dialog-reply', function (arg) {
 	console.log(arg[1]);
 	if ( arg[1] === 'watchFolder' ) {
 		options.watch.directory = arg[0].toString();
+		if (options.watch.enabled) {
+			watchDirectory(true);
+		}
 	} else if ( arg[1] === 'chooseFolder' ) {
 		options.compile.chooseFolder.directory = arg[0].toString();
 	}
@@ -297,7 +296,7 @@ var options = {
 		chooseFolder: {
 			enabled: 	false,
 			directory: 	null
-		}
+		} 
 	},
 	watch: {
 		enabled: 		false,
