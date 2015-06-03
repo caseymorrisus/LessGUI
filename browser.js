@@ -1,6 +1,5 @@
 var ipc 			= require('ipc'),
 	fs 				= require('fs'),
-	stylus 			= require('stylus'),
 	less			= require('less'),
 	path 			= require('path'),
 	Gaze 			= require('gaze'),
